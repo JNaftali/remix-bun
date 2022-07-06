@@ -5,4 +5,4 @@
 3. `bun run build`
 4. `bun run start`
 
-It still won't work but... almost!
+No dev server yet but progress!

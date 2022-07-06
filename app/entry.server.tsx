@@ -1,41 +1,32 @@
 import { RemixServer } from "@remix-run/react";
-import { renderToPipeableStream } from "react-dom/server";
-import { PassThrough } from "stream";
+import { renderToReadableStream } from "react-dom/server";
 
-export default function handleRequest(
+export default async function handleRequest(
   request: Request,
   responseStatusCode: number,
   responseHeaders: Headers,
   remixContext: any
 ) {
-  return new Promise((resolve, reject) => {
-    let didError = false;
+  let controller = new AbortController();
+  let didError = false;
 
-    const { pipe, abort } = renderToPipeableStream(
-      <RemixServer context={remixContext} url={request.url} />,
-      {
-        onAllReady() {
-          const body = new PassThrough();
+  const stream = await renderToReadableStream(
+    <RemixServer context={remixContext} url={request.url} />,
+    {
+      onError(error) {
+        didError = true;
+        console.error(error);
+      },
+      signal: controller.signal,
+    }
+  );
 
-          responseHeaders.set("Content-Type", "text/html");
+  await stream.allReady;
 
-          resolve(
-            new Response(body as any, {
-              status: didError ? 500 : responseStatusCode,
-              headers: responseHeaders,
-            })
-          );
-          pipe(body);
-        },
-        onShellError(error) {
-          reject(error);
-        },
-        onError(error) {
-          didError = true;
-          console.error(error);
-        },
-      }
-    );
-    setTimeout(() => abort(), 5000);
+  responseHeaders.set("Content-Type", "text/html");
+
+  return new Response(stream, {
+    status: didError ? 500 : responseStatusCode,
+    headers: responseHeaders,
   });
 }
